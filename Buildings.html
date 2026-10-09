@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>العمائر والشقق</title>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="theme.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-slate-50 min-h-screen" style="font-family:'Tajawal',sans-serif">
+
+  <header class="bg-white p-4 shadow-sm flex justify-between items-center">
+    <a href="owner.html" class="text-sm text-blue-700">← الرئيسية</a>
+    <h1 class="font-bold">العمائر والشقق</h1>
+    <span class="w-14"></span>
+  </header>
+
+  <main class="p-4 max-w-lg mx-auto">
+    <button id="addBuilding" class="w-full bg-blue-600 text-white rounded-xl p-3 font-medium mb-4">+ إضافة عمارة</button>
+    <div class="flex gap-3 text-xs text-slate-600 mb-3">
+      <span><b class="text-emerald-600">●</b> متاحة</span>
+      <span><b class="text-slate-500">●</b> مؤجرة</span>
+      <span>اضغط على رقم الشقة لتعديله</span>
+    </div>
+    <div id="list" class="space-y-4"><p class="text-sm text-slate-500">جاري التحميل...</p></div>
+  </main>
+
+  <div id="bModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-sm rounded-2xl p-5">
+      <h3 id="bTitle" class="font-bold mb-4"></h3>
+      <input id="bName" type="text" placeholder="اسم العمارة" class="w-full border rounded-xl p-3 mb-3 text-sm">
+      <input id="bDistrict" type="text" placeholder="الحي" class="w-full border rounded-xl p-3 mb-3 text-sm">
+      <input id="bMaps" type="url" placeholder="رابط الموقع من قوقل ماب" class="w-full border rounded-xl p-3 mb-1 text-sm" dir="ltr">
+      <p class="text-xs text-slate-500 mb-3">من قوقل ماب: اضغط مشاركة ثم انسخ الرابط</p>
+      <p id="bError" class="text-red-600 text-sm mb-3 hidden"></p>
+      <div class="flex gap-2">
+        <button id="bSave" class="flex-1 bg-blue-600 text-white rounded-xl p-3 font-medium">حفظ</button>
+        <button id="bCancel" class="flex-1 border rounded-xl p-3">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="aModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-sm rounded-2xl p-5">
+      <h3 id="aTitle" class="font-bold mb-4"></h3>
+      <input id="aUnit" type="text" placeholder="رقم الشقة" class="w-full border rounded-xl p-3 mb-3 text-sm">
+      <input id="aFloor" type="number" placeholder="الدور (اختياري)" class="w-full border rounded-xl p-3 mb-3 text-sm">
+      <p id="aError" class="text-red-600 text-sm mb-3 hidden"></p>
+      <div class="flex gap-2">
+        <button id="aSave" class="flex-1 bg-blue-600 text-white rounded-xl p-3 font-medium">حفظ</button>
+        <button id="aCancel" class="flex-1 border rounded-xl p-3">إلغاء</button>
+      </div>
+      <button id="aDelete" class="hidden w-full border border-red-300 text-red-700 rounded-xl p-2 text-sm mt-3">حذف الشقة</button>
+    </div>
+  </div>
+
+  <div id="gModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-sm rounded-2xl p-5">
+      <h3 id="gTitle" class="font-bold mb-4"></h3>
+      <div id="gForm">
+        <input id="gName" type="text" placeholder="اسم الحارس" class="w-full border rounded-xl p-3 mb-3 text-sm">
+        <div class="flex gap-2 mb-3">
+          <input id="gPass" type="text" placeholder="رمز الدخول (8 خانات فأكثر)" class="flex-1 border rounded-xl p-3 text-sm" dir="ltr">
+          <button id="gGen" class="border rounded-xl px-3 text-sm">توليد</button>
+        </div>
+        <p class="text-xs text-slate-500 mb-3">رقم الدخول (10 أرقام) يتولّد تلقائياً.</p>
+        <p id="gErr" class="text-red-600 text-sm mb-3 hidden"></p>
+        <div class="flex gap-2">
+          <button id="gSave" class="flex-1 bg-blue-600 text-white rounded-xl p-3 font-medium">إنشاء الحساب</button>
+          <button id="gCancel" class="flex-1 border rounded-xl p-3">إلغاء</button>
+        </div>
+      </div>
+      <div id="gResult" class="hidden">
+        <p class="font-bold mb-2">تم إنشاء الحساب ✅</p>
+        <p class="text-sm">رقم الدخول: <b id="rId" dir="ltr"></b></p>
+        <p class="text-sm mb-3">الرمز: <b id="rPass" dir="ltr"></b></p>
+        <p class="text-xs text-slate-500 mb-3">احفظها الحين، الرمز ما يظهر مرة ثانية.</p>
+        <div class="flex gap-2">
+          <button id="gCopy" class="flex-1 bg-blue-600 text-white rounded-xl p-3">نسخ</button>
+          <button id="gDone" class="flex-1 border rounded-xl p-3">تم</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="supabase.js"></script>
+  <script src="common.js"></script>
+  <script>
+    const listBox = document.getElementById('list');
+    let editingBuilding = null;
+    let aptCtx = null;
+
+    function show(id) { document.getElementById(id).classList.remove('hidden'); }
+    function hide(id) { document.getElementById(id).classList.add('hidden'); }
+    function fail(id, msg) { const e = document.getElementById(id); e.textContent = msg; e.classList.remove('hidden'); }
+
+    async function load() {
+      const { data, error } = await db
+        .from('buildings')
+        .select('id, name, district, maps_url, apartments(id, unit_number, floor, status), profiles(id, full_name, login_id, role)')
+        .order('name');
+      if (error) { console.log(error); listBox.innerHTML = '<p class="text-red-600 text-sm">تعذّر التحميل</p>'; return; }
+      if (!data.length) { listBox.innerHTML = '<p class="text-sm text-slate-500">ما فيه عمائر. أضف أول عمارة.</p>'; return; }
+
+      listBox.innerHTML = '';
+      data.forEach(b => {
+        const apts = (b.apartments || []).slice().sort((x, y) => String(x.unit_number).localeCompare(String(y.unit_number), 'ar', { numeric: true }));
+        const card = document.createElement('div');
+        card.className = 'bg-white rounded-2xl p-4 shadow-sm';
+        card.innerHTML = `
+          <p class="font-bold">${esc(b.name)}</p>
+          <p class="text-sm text-slate-500 mb-3">${esc(b.district || 'الحي غير محدد')} · ${apts.length} شقة</p>`;
+
+        const chips = document.createElement('div');
+        chips.className = 'flex flex-wrap gap-2 mb-3';
+        apts.forEach(a => {
+          const c = document.createElement('button');
+          c.className = 'rounded-xl px-3 py-2 text-sm ' + (a.status === 'vacant' ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-200 text-slate-700');
+          c.textContent = a.unit_number;
+          c.onclick = () => openApt(b, a);
+          chips.appendChild(c);
+        });
+        card.appendChild(chips);
+
+        const gs = (b.profiles || []).filter(p => p.role === 'guard');
+        const gbox = document.createElement('div');
+        gbox.className = 'mb-3 border-t pt-3';
+        gbox.innerHTML = '<p class="text-sm font-medium mb-2">الحارس</p>' + (gs.length ? '' : '<p class="text-xs text-slate-500 mb-2">ما فيه حارس لهذي العمارة</p>');
+        gs.forEach(g => {
+          const r = document.createElement('div');
+          r.className = 'flex justify-between items-center mb-2 text-sm';
+          r.innerHTML = '<span>' + esc(g.full_name) + ' <span class="text-xs text-slate-500" dir="ltr">' + esc(g.login_id || '') + '</span></span>';
+          const d = document.createElement('button');
+          d.className = 'text-xs text-red-700 border border-red-300 rounded-lg px-2 py-1';
+          d.textContent = 'حذف'; d.onclick = () => delGuard(g);
+          r.appendChild(d); gbox.appendChild(r);
+        });
+        const addG = document.createElement('button');
+        addG.className = 'border rounded-xl px-3 py-2 text-sm bg-blue-50 text-blue-800';
+        addG.textContent = '+ حارس'; addG.onclick = () => openGuard(b);
+        gbox.appendChild(addG);
+        card.appendChild(gbox);
+
+        const row = document.createElement('div');
+        row.className = 'flex gap-2 flex-wrap';
+        const mk = (label, fn, cls) => {
+          const x = document.createElement('button');
+          x.className = 'border rounded-xl px-3 py-2 text-sm ' + (cls || '');
+          x.textContent = label; x.onclick = fn; row.appendChild(x);
+        };
+        mk('+ شقة', () => openApt(b, null), 'bg-blue-50 text-blue-800');
+        mk('تعديل', () => openBuilding(b));
+        mk('حذف', () => delBuilding(b, apts), 'text-red-700 border-red-300');
+        if (b.maps_url) {
+          mk('فتح الموقع', () => window.open(b.maps_url, '_blank', 'noopener'));
+          mk('نسخ الرابط', async () => { try { await navigator.clipboard.writeText(b.maps_url); toast('تم نسخ الرابط'); } catch (e) { prompt('انسخ الرابط:', b.maps_url); } });
+        } else {
+          const w = document.createElement('p');
+          w.className = 'text-xs text-amber-700 self-center';
+          w.textContent = 'لم يُضف موقع';
+          row.appendChild(w);
+        }
+        card.appendChild(row);
+        listBox.appendChild(card);
+      });
+    }
+
+    function openBuilding(b) {
+      editingBuilding = b;
+      document.getElementById('bTitle').textContent = b ? 'تعديل العمارة' : 'عمارة جديدة';
+      document.getElementById('bName').value = b ? b.name : '';
+      document.getElementById('bDistrict').value = b ? (b.district || '') : '';
+      document.getElementById('bMaps').value = b ? (b.maps_url || '') : '';
+      hide('bError'); show('bModal');
+    }
+
+    document.getElementById('addBuilding').onclick = () => openBuilding(null);
+    document.getElementById('bCancel').onclick = () => hide('bModal');
+
+    document.getElementById('bSave').onclick = async () => {
+      const name = document.getElementById('bName').value.trim();
+      const district = document.getElementById('bDistrict').value.trim();
+      const maps = document.getElementById('bMaps').value.trim();
+      if (!name) return fail('bError', 'اكتب اسم العمارة');
+      if (maps && !/^https?:\/\//i.test(maps)) return fail('bError', 'الرابط لازم يبدأ بـ https://');
+
+      const row = { name, district: district || null, maps_url: maps || null };
+      const q = editingBuilding ? db.from('buildings').update(row).eq('id', editingBuilding.id) : db.from('buildings').insert(row);
+      const { error } = await q;
+      if (error) { console.log(error); return fail('bError', 'تعذّر الحفظ'); }
+      hide('bModal'); load();
+    };
+
+    function openApt(b, a) {
+      aptCtx = { building: b, apt: a };
+      document.getElementById('aTitle').textContent = a ? 'تعديل شقة ' + a.unit_number : 'شقة جديدة في ' + b.name;
+      document.getElementById('aUnit').value = a ? a.unit_number : '';
+      document.getElementById('aFloor').value = a && a.floor != null ? a.floor : '';
+      hide('aError'); show('aModal');
+      document.getElementById('aDelete').classList.toggle('hidden', !(a && a.status === 'vacant'));
+    }
+
+    document.getElementById('aCancel').onclick = () => hide('aModal');
+
+    document.getElementById('aSave').onclick = async () => {
+      const unit = document.getElementById('aUnit').value.trim();
+      const floorVal = document.getElementById('aFloor').value;
+      if (!unit) return fail('aError', 'اكتب رقم الشقة');
+
+      const row = { unit_number: unit, floor: floorVal === '' ? null : parseInt(floorVal, 10) };
+      const { building, apt } = aptCtx;
+      const q = apt
+        ? db.from('apartments').update(row).eq('id', apt.id)
+        : db.from('apartments').insert({ ...row, building_id: building.id });
+      const { error } = await q;
+      if (error) {
+        console.log(error);
+        return fail('aError', error.code === '23505' ? 'رقم الشقة موجود في هذه العمارة' : 'تعذّر الحفظ');
+      }
+      hide('aModal'); load();
+    };
+
+    const $g = id => document.getElementById(id);
+    let guardBld = null, lastGuard = '';
+
+    async function callFn(body) {
+      const { data: { session } } = await db.auth.getSession();
+      if (!session) { window.location.href = 'index.html'; return { error: {} }; }
+      return db.functions.invoke('create-guard', { body, headers: { Authorization: 'Bearer ' + session.access_token } });
+    }
+    async function fnMsg(error, fallback) {
+      try { return (await error.context.json()).error || fallback; } catch (e) { console.log(error); return fallback; }
+    }
+
+    function openGuard(b) {
+      guardBld = b;
+      $g('gTitle').textContent = 'حارس جديد - ' + b.name;
+      $g('gName').value = ''; $g('gPass').value = '';
+      $g('gErr').classList.add('hidden');
+      $g('gForm').classList.remove('hidden'); $g('gResult').classList.add('hidden');
+      show('gModal');
+    }
+    $g('gGen').onclick = () => { $g('gPass').value = Array.from(crypto.getRandomValues(new Uint8Array(8)), x => x % 10).join(''); };
+    $g('gCancel').onclick = () => hide('gModal');
+    $g('gDone').onclick = () => { hide('gModal'); load(); };
+    $g('gCopy').onclick = async () => { try { await navigator.clipboard.writeText(lastGuard); toast('تم النسخ'); } catch (e) { prompt('انسخ:', lastGuard); } };
+
+    $g('gSave').onclick = async () => {
+      const full_name = $g('gName').value.trim(), password = $g('gPass').value;
+      if (!full_name) return fail('gErr', 'اكتب اسم الحارس');
+      if (password.length < 8) return fail('gErr', 'الرمز لازم 8 خانات على الأقل');
+      $g('gSave').disabled = true; $g('gSave').textContent = 'جاري الإنشاء...';
+      const { data, error } = await callFn({ full_name, building_id: guardBld.id, password });
+      $g('gSave').disabled = false; $g('gSave').textContent = 'إنشاء الحساب';
+      if (error) {
+        let msg = 'تعذّر إنشاء الحساب';
+        msg = await fnMsg(error, msg);
+        return fail('gErr', msg);
+      }
+      $g('rId').textContent = data.login_id; $g('rPass').textContent = password;
+      lastGuard = 'رقم الدخول: ' + data.login_id + '\nالرمز: ' + password + '\nالرابط: ' + location.origin;
+      $g('gForm').classList.add('hidden'); $g('gResult').classList.remove('hidden');
+    };
+
+    async function delGuard(g) {
+      if (!confirm('حذف حساب الحارس ' + g.full_name + '؟ ما يقدر يدخل بعدها.')) return;
+      const { error } = await callFn({ action: 'delete', guard_id: g.id });
+      if (error) return toast(await fnMsg(error, 'تعذّر حذف الحارس'));
+      toast('تم حذف الحارس'); load();
+    }
+
+    async function delBuilding(b, apts) {
+      if (apts.some(a => a.status === 'rented')) return toast('فيه شقق مؤجرة: أخلِ المستأجرين أولاً');
+      if ((b.profiles || []).some(p => p.role === 'guard')) return toast('احذف حارس العمارة أولاً');
+      const t = prompt('حذف العمارة يحذف شققها وسجل مستأجريها السابقين، والمالية تبقى محفوظة.\nللتأكيد اكتب اسم العمارة: ' + b.name);
+      if (t === null) return;
+      if (t.trim() !== b.name) return toast('الاسم غير مطابق');
+      const { error } = await db.from('buildings').delete().eq('id', b.id);
+      if (error) { console.log(error); return toast('تعذّر الحذف'); }
+      toast('تم حذف العمارة'); load();
+    }
+
+    document.getElementById('aDelete').onclick = async () => {
+      const a = aptCtx.apt;
+      if (!confirm('حذف شقة ' + a.unit_number + '؟ يحذف أيضاً أي سجل مستأجرين سابقين لها.')) return;
+      const { error } = await db.from('apartments').delete().eq('id', a.id);
+      if (error) { console.log(error); return fail('aError', 'تعذّر الحذف'); }
+      hide('aModal'); load();
+    };
+
+    (async () => { if (await requireRole('owner')) load(); })();
+  </script>
+</body>
+</html>

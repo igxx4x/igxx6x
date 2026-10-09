@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="theme.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <title>الطلبات</title>
+</head>
+<body class="bg-slate-50 min-h-screen" style="font-family:'Tajawal',sans-serif">
+  <header class="bg-white p-4 shadow-sm flex justify-between items-center">
+    <a href="owner.html" class="text-sm text-blue-700">← الرئيسية</a>
+    <h1 class="font-bold">طلبات الحراس</h1>
+    <button onclick="load()" class="text-sm border rounded-xl px-3 py-1">تحديث</button>
+  </header>
+  <main class="p-4 max-w-lg mx-auto"><div id="list" class="space-y-3"></div></main>
+  <script src="supabase.js"></script>
+  <script src="common.js"></script>
+  <script>
+    const info = {
+      maintenance: ['🔧', 'طلب صيانة', 'border-orange-300'],
+      water: ['💧', 'طلب تعبئة مياه', 'border-blue-300'],
+      vacated: ['🚪', 'إخلاء شقة', 'border-slate-300']
+    };
+    function ago(s) {
+      const m = Math.floor((Date.now() - new Date(s)) / 60000);
+      if (m < 1) return 'الحين';
+      if (m < 60) return 'قبل ' + m + ' دقيقة';
+      if (m < 1440) return 'قبل ' + Math.floor(m / 60) + ' ساعة';
+      return 'قبل ' + Math.floor(m / 1440) + ' يوم';
+    }
+    async function load() {
+      const box = document.getElementById('list');
+      const { data, error } = await db.from('requests')
+        .select('id, type, note, created_at, buildings(name)')
+        .eq('status', 'new').order('created_at', { ascending: false });
+      if (error) { console.log(error); box.innerHTML = '<p class="text-red-600 text-sm">تعذّر التحميل</p>'; return; }
+      if (!data.length) { box.innerHTML = '<p class="text-sm text-slate-500 text-center mt-8">ما فيه طلبات جديدة 👌</p>'; return; }
+      box.innerHTML = '';
+      data.forEach(r => {
+        const i = info[r.type] || ['📩', r.type, 'border-slate-300'];
+        const c = document.createElement('div');
+        c.className = 'bg-white rounded-2xl p-4 border-r-4 flex justify-between items-center ' + i[2];
+        c.innerHTML = '<div><p class="font-medium">' + i[0] + ' ' + esc(i[1]) + '</p><p class="text-sm text-slate-500">' +
+          esc(r.buildings ? r.buildings.name : '') + ' · ' + ago(r.created_at) + '</p>' +
+          (r.note ? '<p class="text-sm text-slate-600 mt-1">' + esc(r.note) + '</p>' : '') + '</div>';
+        const b = document.createElement('button');
+        b.className = 'border rounded-xl px-4 py-2 text-sm';
+        b.textContent = 'تم';
+        b.onclick = async () => {
+          b.disabled = true;
+          const { error } = await db.from('requests').update({ status: 'done' }).eq('id', r.id);
+          if (error) { console.log(error); b.disabled = false; toast('تعذّر التحديث'); return; }
+          load();
+        };
+        c.appendChild(b);
+        box.appendChild(c);
+      });
+    }
+    (async () => { if (await requireRole('owner')) load(); })();
+  </script>
+</body>
+</html>

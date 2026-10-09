@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="theme.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <title>المستأجرون والعقود</title>
+</head>
+<body class="bg-slate-50 min-h-screen" style="font-family:'Tajawal',sans-serif">
+  <header class="bg-white p-4 shadow-sm flex justify-between items-center">
+    <a href="owner.html" class="text-sm text-blue-700">← الرئيسية</a>
+    <h1 class="font-bold">المستأجرون والعقود</h1>
+    <button onclick="load()" class="text-sm border rounded-xl px-3 py-1">تحديث</button>
+  </header>
+  <main class="p-4 max-w-lg mx-auto"><div class="flex gap-2 mb-3"><button id="tabA" class="flex-1 rounded-xl p-2 text-sm bg-blue-600 text-white">الحاليون</button><button id="tabB" class="flex-1 rounded-xl p-2 text-sm border">الأرشيف</button></div><div id="list" class="space-y-3"><p class="text-sm text-slate-500">جاري التحميل...</p></div></main>
+
+  <div id="modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-sm rounded-2xl p-5">
+      <h3 id="mTitle" class="font-bold mb-4"></h3>
+      <label class="text-xs text-slate-500">قيمة الإيجار</label>
+      <input id="cRent" type="number" min="0" step="0.01" class="w-full border rounded-xl p-3 mb-3 text-sm" dir="ltr">
+      <label class="text-xs text-slate-500">تاريخ نهاية العقد</label>
+      <input id="cEnd" type="date" class="w-full border rounded-xl p-3 mb-3 text-sm" dir="ltr">
+      <label class="text-xs text-slate-500">تاريخ الدفعة القادمة</label>
+      <input id="cNext" type="date" class="w-full border rounded-xl p-3 mb-3 text-sm" dir="ltr">
+      <p id="mErr" class="text-red-600 text-sm mb-3 hidden"></p>
+      <div class="flex gap-2">
+        <button id="mSave" class="flex-1 bg-blue-600 text-white rounded-xl p-3 font-medium">حفظ</button>
+        <button id="mCancel" class="flex-1 border rounded-xl p-3">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="supabase.js"></script>
+  <script src="common.js"></script>
+  <script>
+    let editing = null, view = 'active';
+    const el = id => document.getElementById(id);
+
+    const daysTo = d => Math.round((new Date(d + 'T00:00:00') - new Date(today() + 'T00:00:00')) / 86400000);
+
+    function waLink(phone, text) {
+      let p = String(phone).replace(/\D/g, '');
+      if (p.startsWith('00')) p = p.slice(2);
+      else if (p.startsWith('05')) p = '966' + p.slice(1);
+      else if (p.length === 9 && p.startsWith('5')) p = '966' + p;
+      return 'https://wa.me/' + p + (text ? '?text=' + encodeURIComponent(text) : '');
+    }
+    const openWa = (phone, text) => window.open(waLink(phone, text), '_blank', 'noopener');
+
+    function badge(txt, cls) { return '<span class="text-xs px-2 py-1 rounded-lg ' + cls + '">' + txt + '</span>'; }
+
+    async function load() {
+      const box = el('list');
+      const { data, error } = await db.from('tenants')
+        .select('id, full_name, phone, end_date, rent_amount, next_payment_date, start_date, apartments(id, unit_number, building_id, buildings(name))')
+        .eq('is_active', view === 'active');
+      if (error) { console.log(error); box.innerHTML = '<p class="text-red-600 text-sm">تعذّر التحميل</p>'; return; }
+      if (!data.length) { box.innerHTML = '<p class="text-sm text-slate-500 text-center mt-8">' + (view === 'active' ? 'ما فيه مستأجرين حالياً' : 'الأرشيف فاضي') + '</p>'; return; }
+      data.sort((a, b) => (a.end_date || '9999').localeCompare(b.end_date || '9999'));
+
+      box.innerHTML = '';
+      data.forEach(t => {
+        const apt = t.apartments || {};
+        const bName = apt.buildings ? apt.buildings.name : '';
+        const unit = apt.unit_number;
+        if (view === 'archived') { box.appendChild(archivedCard(t, bName, unit)); return; }
+        const endD = t.end_date ? daysTo(t.end_date) : null;
+        const payD = t.next_payment_date ? daysTo(t.next_payment_date) : null;
+
+        let badges = '';
+        if (t.rent_amount == null || !t.end_date) badges += badge('بيانات العقد ناقصة', 'bg-amber-100 text-amber-800');
+        if (endD !== null) {
+          if (endD < 0) badges += badge('العقد منتهي', 'bg-red-100 text-red-800');
+          else if (endD <= 7) badges += badge('ينتهي بعد ' + endD + ' يوم', 'bg-red-100 text-red-800');
+          else if (endD <= 30) badges += badge('ينتهي بعد ' + endD + ' يوم', 'bg-yellow-100 text-yellow-800');
+        }
+        if (payD !== null) {
+          if (payD < 0) badges += badge('دفعة متأخرة', 'bg-red-100 text-red-800');
+          else if (payD <= 2) badges += badge('الدفعة بعد ' + payD + ' يوم', 'bg-blue-100 text-blue-800');
+        }
+
+        const c = document.createElement('div');
+        c.className = 'bg-white rounded-2xl p-4 shadow-sm';
+        c.innerHTML = '<div class="flex justify-between items-start"><div><p class="font-bold">' + esc(t.full_name) +
+          '</p><p class="text-sm text-slate-500">' + esc(bName) + ' - شقة ' + esc(unit) + '</p></div>' +
+          '<span class="text-sm text-slate-500" dir="ltr">' + esc(t.phone) + '</span></div>' +
+          '<div class="mt-2 text-sm text-slate-600 space-y-1"><p>الإيجار: ' + (t.rent_amount != null ? money(t.rent_amount) : 'غير محدد') +
+          '</p><p>نهاية العقد: ' + esc(t.end_date || 'غير محددة') + '</p><p>الدفعة القادمة: ' + esc(t.next_payment_date || 'غير محددة') + '</p></div>' +
+          (badges ? '<div class="mt-2 flex gap-2 flex-wrap">' + badges + '</div>' : '');
+
+        const row = document.createElement('div');
+        row.className = 'mt-3 flex gap-2 flex-wrap';
+        const mk = (label, cls, fn) => { const b = document.createElement('button'); b.className = 'rounded-xl px-3 py-2 text-sm ' + cls; b.textContent = label; b.onclick = fn; row.appendChild(b); };
+
+        if (endD !== null && endD <= 7)
+          mk('📲 تذكير بانتهاء العقد', 'bg-emerald-600 text-white', () => openWa(t.phone,
+            'السلام عليكم ' + t.full_name + '، نذكّركم بأن عقد إيجار شقة ' + unit + ' في ' + bName + ' ينتهي بتاريخ ' + t.end_date + '. نأمل التواصل معنا بخصوص التجديد. شكراً لكم.'));
+        if (payD !== null && payD <= 2)
+          mk('📲 تذكير بالدفعة', 'bg-emerald-600 text-white', () => openWa(t.phone,
+            'السلام عليكم ' + t.full_name + '، نذكّركم بموعد دفعة إيجار شقة ' + unit + ' بتاريخ ' + t.next_payment_date +
+            (t.rent_amount != null ? ' بمبلغ ' + money(t.rent_amount) : '') + '. شكراً لكم.'));
+        if (t.rent_amount != null && t.next_payment_date)
+          mk('✓ استلمت الدفعة', 'border', () => receive(t, unit, apt.building_id));
+        mk('أرشفة', 'border border-amber-300 text-amber-800', () => archive(t, apt));
+        mk('تعديل العقد', 'border', () => openEdit(t, unit));
+        mk('واتساب', 'border', () => openWa(t.phone, ''));
+        c.appendChild(row);
+        box.appendChild(c);
+      });
+    }
+
+    async function receive(t, unit, buildingId) {
+      if (!confirm('تسجيل دفعة ' + money(t.rent_amount) + ' من ' + t.full_name + ' كدخل؟')) return;
+      let r = await db.from('transactions').insert({
+        building_id: buildingId, type: 'income', amount: t.rent_amount,
+        description: 'إيجار شقة ' + unit + ' - ' + t.full_name, trans_date: today()
+      });
+      if (!r.error) r = await db.from('tenants').update({ next_payment_date: addMonths(t.next_payment_date, 1) }).eq('id', t.id);
+      if (r.error) { console.log(r.error); return toast('تعذّر تسجيل الدفعة'); }
+      toast('تم تسجيل الدفعة'); load();
+    }
+
+    function setView(v) {
+      view = v;
+      el('tabA').className = 'flex-1 rounded-xl p-2 text-sm ' + (v === 'active' ? 'bg-blue-600 text-white' : 'border');
+      el('tabB').className = 'flex-1 rounded-xl p-2 text-sm ' + (v === 'archived' ? 'bg-blue-600 text-white' : 'border');
+      load();
+    }
+    el('tabA').onclick = () => setView('active');
+    el('tabB').onclick = () => setView('archived');
+
+    async function archive(t, apt) {
+      if (!confirm('أرشفة ' + t.full_name + '؟ تصير شقة ' + apt.unit_number + ' متاحة، ويبقى سجله في الأرشيف.')) return;
+      let r = await db.from('tenants').update({ is_active: false }).eq('id', t.id);
+      if (!r.error) r = await db.from('apartments').update({ status: 'vacant' }).eq('id', apt.id);
+      if (r.error) { console.log(r.error); return toast('تعذّرت الأرشفة'); }
+      toast('تمت الأرشفة'); load();
+    }
+
+    async function delTenant(t) {
+      const typed = prompt('الحذف نهائي ولا يمكن التراجع عنه.\nللتأكيد اكتب اسم المستأجر: ' + t.full_name);
+      if (typed === null) return;
+      if (typed.trim() !== t.full_name) return toast('الاسم غير مطابق');
+      const { error } = await db.from('tenants').delete().eq('id', t.id);
+      if (error) { console.log(error); return toast('تعذّر الحذف'); }
+      toast('تم الحذف'); load();
+    }
+
+    function archivedCard(t, bName, unit) {
+      const c = document.createElement('div');
+      c.className = 'bg-white rounded-2xl p-4 shadow-sm';
+      c.innerHTML = '<div class="flex justify-between items-start"><div><p class="font-bold">' + esc(t.full_name) +
+        '</p><p class="text-sm text-slate-500">' + esc(bName) + ' - شقة ' + esc(unit) + '</p></div><span class="text-sm text-slate-500" dir="ltr">' + esc(t.phone) +
+        '</span></div><p class="text-sm text-slate-600 mt-2">من ' + esc(t.start_date || '-') + ' إلى ' + esc(t.end_date || '-') + '</p>';
+      const b = document.createElement('button');
+      b.className = 'mt-3 rounded-xl px-3 py-2 text-sm border border-red-300 text-red-700';
+      b.textContent = 'حذف نهائي'; b.onclick = () => delTenant(t);
+      c.appendChild(b);
+      return c;
+    }
+
+    function openEdit(t, unit) {
+      editing = t;
+      el('mTitle').textContent = 'عقد ' + t.full_name + ' - شقة ' + unit;
+      el('cRent').value = t.rent_amount ?? '';
+      el('cEnd').value = t.end_date ?? '';
+      el('cNext').value = t.next_payment_date ?? '';
+      el('mErr').classList.add('hidden');
+      el('modal').classList.remove('hidden');
+    }
+    el('mCancel').onclick = () => el('modal').classList.add('hidden');
+
+    el('mSave').onclick = async () => {
+      const rent = parseFloat(el('cRent').value), end = el('cEnd').value, next = el('cNext').value;
+      const fail = m => { el('mErr').textContent = m; el('mErr').classList.remove('hidden'); };
+      if (!rent || rent <= 0) return fail('اكتب قيمة الإيجار');
+      if (!end) return fail('اختر تاريخ نهاية العقد');
+      const { error } = await db.from('tenants').update({ rent_amount: rent, end_date: end, next_payment_date: next || null }).eq('id', editing.id);
+      if (error) { console.log(error); return fail('تعذّر الحفظ'); }
+      el('modal').classList.add('hidden'); load();
+    };
+
+    (async () => { if (await requireRole('owner')) load(); })();
+  </script>
+</body>
+</html>

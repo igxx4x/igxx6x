@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>لوحة المالك</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+  <header class="bg-white p-4 shadow flex justify-between items-center">
+    <div>
+      <h1 class="font-bold">لوحة المالك</h1>
+      <p id="ownerName" class="text-sm text-gray-500"></p>
+    </div>
+    <div class="flex gap-2">
+      <button id="refresh" class="border rounded-lg px-3 py-1 text-sm">تحديث</button>
+      <button id="logout" class="border rounded-lg px-3 py-1 text-sm">خروج</button>
+    </div>
+  </header>
+
+  <main class="p-4 space-y-6">
+
+    <section>
+      <div class="flex justify-between items-center mb-3">
+        <h2 class="font-medium">الملخص المالي</h2>
+        <input id="monthPicker" type="month" class="border rounded-lg px-2 py-1 text-sm bg-white" dir="ltr">
+      </div>
+      <div class="grid grid-cols-2 gap-3 mb-3">
+        <div class="bg-white rounded-xl p-4">
+          <p class="text-xs text-gray-500">إجمالي الدخل</p>
+          <p id="incomeTotal" class="text-xl font-bold text-green-700">-</p>
+        </div>
+        <div class="bg-white rounded-xl p-4">
+          <p class="text-xs text-gray-500">إجمالي المصروفات</p>
+          <p id="expenseTotal" class="text-xl font-bold text-red-700">-</p>
+        </div>
+      </div>
+      <div class="bg-blue-50 rounded-xl p-4 flex justify-between items-center">
+        <span class="text-sm text-blue-800">صافي الربح</span>
+        <span id="netTotal" class="text-2xl font-bold text-blue-800">-</span>
+      </div>
+      <button id="addTransBtn" class="mt-3 w-full bg-blue-600 text-white rounded-lg p-3 font-medium">
+        + إضافة دخل / مصروف
+      </button>
+
+      <h3 class="text-sm font-medium mt-4 mb-2">حركات الشهر</h3>
+      <div id="transList" class="space-y-2">
+        <p class="text-sm text-gray-500">جاري التحميل...</p>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="font-medium mb-3">حالة الشقق</h2>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="bg-white rounded-xl p-4 text-center">
+          <p id="rentedCount" class="text-2xl font-bold">-</p>
+          <p class="text-sm text-gray-500">مؤجرة</p>
+        </div>
+        <div class="bg-white rounded-xl p-4 text-center">
+          <p id="vacantCount" class="text-2xl font-bold text-green-700">-</p>
+          <p class="text-sm text-gray-500">متاحة</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="font-medium mb-3">العقارات والمستأجرون</h2>
+      <div id="props" class="space-y-3">
+        <p class="text-sm text-gray-500">جاري التحميل...</p>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="font-medium mb-3">طلبات الحراس الواردة</h2>
+      <div id="requests" class="space-y-3">
+        <p class="text-sm text-gray-500">جاري التحميل...</p>
+      </div>
+    </section>
+
+  </main>
+
+  <div id="transModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-sm rounded-2xl p-5">
+      <h3 class="font-bold mb-4">حركة مالية جديدة</h3>
+
+      <div class="grid grid-cols-2 gap-2 mb-3">
+        <button id="typeIncome" class="border rounded-lg p-2 text-sm">دخل</button>
+        <button id="typeExpense" class="border rounded-lg p-2 text-sm">مصروف</button>
+      </div>
+
+      <input id="tAmount" type="number" min="0" step="0.01" placeholder="المبلغ"
+        class="w-full border rounded-lg p-3 mb-3 text-sm" dir="ltr">
+      <input id="tDesc" type="text" placeholder="الوصف (مثال: إيجار شقة 1، فاتورة كهرباء)"
+        class="w-full border rounded-lg p-3 mb-3 text-sm">
+
+      <label class="text-xs text-gray-500">العمارة</label>
+      <select id="tBuilding" class="w-full border rounded-lg p-3 mb-3 text-sm bg-white"></select>
+
+      <label class="text-xs text-gray-500">التاريخ</label>
+      <input id="tDate" type="date" class="w-full border rounded-lg p-3 mb-3 text-sm" dir="ltr">
+
+      <p id="transError" class="text-red-600 text-sm mb-3 hidden"></p>
+
+      <div class="flex gap-2">
+        <button id="transSave" class="flex-1 bg-blue-600 text-white rounded-lg p-3 font-medium">حفظ</button>
+        <button id="transCancel" class="flex-1 border rounded-lg p-3">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="contractModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-sm rounded-2xl p-5">
+      <h3 id="contractTitle" class="font-bold mb-4"></h3>
+
+      <label class="text-xs text-gray-500">قيمة الإيجار</label>
+      <input id="cRent" type="number" min="0" step="0.01" placeholder="مثال: 2500"
+        class="w-full border rounded-lg p-3 mb-3 text-sm" dir="ltr">
+
+      <label class="text-xs text-gray-500">تاريخ نهاية العقد</label>
+      <input id="cEnd" type="date" class="w-full border rounded-lg p-3 mb-3 text-sm" dir="ltr">
+
+      <label class="text-xs text-gray-500">تاريخ الدفعة القادمة</label>
+      <input id="cNext" type="date" class="w-full border rounded-lg p-3 mb-3 text-sm" dir="ltr">
+
+      <p id="contractError" class="text-red-600 text-sm mb-3 hidden"></p>
+
+      <div class="flex gap-2">
+        <button id="contractSave" class="flex-1 bg-blue-600 text-white rounded-lg p-3 font-medium">حفظ</button>
+        <button id="contractCancel" class="flex-1 border rounded-lg p-3">إلغاء</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="hidden fixed bottom-4 inset-x-4 bg-gray-800 text-white text-sm text-center rounded-lg p-3"></div>
+
+  <script src="supabase.js"></script>
+  <script>
+    const requestsBox = document.getElementById('requests');
+    const transList = document.getElementById('transList');
+    const monthPicker = document.getElementById('monthPicker');
+    const transModal = document.getElementById('transModal');
+    const transError = document.getElementById('transError');
+    const transSave = document.getElementById('transSave');
+
+    let selectedType = 'income';
+    let ownerId = null;
+
+    const typeInfo = {
+      maintenance: { icon: '🔧', label: 'طلب صيانة', border: 'border-orange-300' },
+      water:       { icon: '💧', label: 'طلب تعبئة مياه', border: 'border-blue-300' },
+      vacated:     { icon: '🚪', label: 'إخلاء شقة', border: 'border-gray-300' }
+    };
+
+    function esc(text) {
+      const d = document.createElement('div');
+      d.textContent = text ?? '';
+      return d.innerHTML;
+    }
+
+    function money(n) {
+      return Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' ر.س';
+    }
+
+    function timeAgo(dateStr) {
+      const mins = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
+      if (mins < 1) return 'الحين';
+      if (mins < 60) return 'قبل ' + mins + ' دقيقة';
+      const hours = Math.floor(mins / 60);
+      if (hours < 24) return 'قبل ' + hours + ' ساعة';
+      return 'قبل ' + Math.floor(hours / 24) + ' يوم';
+    }
+
+    function todayStr() {
+      return new Date().toISOString().slice(0, 10);
+    }
+
+    async function init() {
+      const { data: { session } } = await db.auth.getSession();
+      if (!session) { window.location.href = 'index.html'; return; }
+      ownerId = session.user.id;
+
+      const { data: profile } = await db
+        .from('profiles')
+        .select('full_name, role')
+        .eq('id', ownerId)
+        .single();
+
+      if (!profile || profile.role !== 'owner') {
+        window.location.href = 'index.html';
+        return;
+      }
+      document.getElementById('ownerName').textContent = 'أهلاً يا ' + profile.full_name;
+
+      monthPicker.value = todayStr().slice(0, 7);
+      await loadBuildingsSelect();
+      await loadAll();
+    }
+
+    async function loadAll() {
+      await Promise.all([loadFinance(), loadCounts(), loadProperties(), loadRequests()]);
+    }
+
+    async function loadBuildingsSelect() {
+      const { data, error } = await db.from('buildings').select('id, name').order('name');
+      if (error) { console.log(error); return; }
+      const sel = document.getElementById('tBuilding');
+      sel.innerHTML = '';
+      data.forEach(b => {
+        const opt = document.createElement('option');
+        opt.value = b.id;
+        opt.textContent = b.name;
+        sel.appendChild(opt);
+      });
+    }
+
+    async function loadFinance() {
+      const [year, month] = monthPicker.value.split('-').map(Number);
+      const from = monthPicker.value + '-01';
+      const nextYear = month === 12 ? year + 1 : year;
+      const nextMonth = month === 12 ? 1 : month + 1;
+      const to = nextYear + '-' + String(nextMonth).padStart(2, '0') + '-01';
+
+      const { data, error } = await db
+        .from('transactions')
+        .select('id, type, amount, description, trans_date, buildings(name)')
+        .gte('trans_date', from)
+        .lt('trans_date', to)
+        .order('trans_date', { ascending: false });
+
+      if (error) {
+        console.log(error);
+        transList.innerHTML = '<p class="text-red-600 text-sm">تعذّر تحميل الحركات</p>';
+        return;
+      }
+
+      let income = 0, expense = 0;
+      data.forEach(t => {
+        if (t.type === 'income') income += Number(t.amount);
+        else expense += Number(t.amount);
+      });
+      document.getElementById('incomeTotal').textContent = money(income);
+      document.getElementById('expenseTotal').textContent = money(expense);
+      document.getElementById('netTotal').textContent = money(income - expense);
+
+      if (!data.length) {
+        transList.innerHTML = '<p class="text-sm text-gray-500">ما فيه حركات في هذا الشهر</p>';
+        return;
+      }
+
+      transList.innerHTML = '';
+      data.forEach(t => {
+        const isIncome = t.type === 'income';
+        const row = document.createElement('div');
+        row.className = 'bg-white rounded-xl p-3 flex justify-between items-center';
+        row.innerHTML = `
+          <div>
+            <p class="text-sm font-medium">${esc(t.description || (isIncome ? 'دخل' : 'مصروف'))}</p>
+            <p class="text-xs text-gray-500">${esc(t.buildings ? t.buildings.name : '')} · ${esc(t.trans_date)}</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-sm font-bold ${isIncome ? 'text-green-700' : 'text-red-700'}">
+              ${isIncome ? '+' : '-'}${money(t.amount)}
+            </span>
+          </div>`;
+
+        const del = document.createElement('button');
+        del.className = 'text-xs text-gray-400 mr-2';
+        del.textContent = 'حذف';
+        del.onclick = () => deleteTransaction(t.id);
+        row.lastElementChild.appendChild(del);
+
+        transList.appendChild(row);
+      });
+    }
+
+    async function deleteTransaction(id) {
+      if (!confirm('تأكيد حذف هذه الحركة؟')) return;
+      const { error } = await db.from('transactions').delete().eq('id', id);
+      if (error) {
+        console.log(error);
+        alert('تعذّر الحذف');
+        return;
+      }
+      await loadFinance();
+    }
+
+    function setType(type) {
+      selectedType = type;
+      const inc = document.getElementById('typeIncome');
+      const exp = document.getElementById('typeExpense');
+      inc.className = 'border rounded-lg p-2 text-sm ' + (type === 'income' ? 'bg-green-100 border-green-400 text-green-800 font-medium' : '');
+      exp.className = 'border rounded-lg p-2 text-sm ' + (type === 'expense' ? 'bg-red-100 border-red-400 text-red-800 font-medium' : '');
+    }
+
+    function openTransModal() {
+      setType('income');
+      document.getElementById('tAmount').value = '';
+      document.getElementById('tDesc').value = '';
+      document.getElementById('tDate').value = todayStr();
+      transError.classList.add('hidden');
+      transModal.classList.remove('hidden');
+    }
+
+    function closeTransModal() {
+      transModal.classList.add('hidden');
+    }
+
+    function showTransError(msg) {
+      transError.textContent = msg;
+      transError.classList.remove('hidden');
+    }
+
+    transSave.onclick = async () => {
+      const amount = parseFloat(document.getElementById('tAmount').value);
+      const desc = document.getElementById('tDesc').value.trim();
+      const buildingId = document.getElementById('tBuilding').value;
+      const date = document.getElementById('tDate').value;
+
+      if (!amount || amount <= 0) { showTransError('اكتب مبلغ صحيح'); return; }
+      if (!date) { showTransError('اختر التاريخ'); return; }
+
+      transSave.disabled = true;
+      transSave.textContent = 'جاري الحفظ...';
+
+      const { error } = await db.from('transactions').insert({
+        building_id: buildingId || null,
+        type: selectedType,
+        amount: amount,
+        description: desc || null,
+        trans_date: date
+      });
+
+      transSave.disabled = false;
+      transSave.textContent = 'حفظ';
+
+      if (error) {
+        console.log(error);
+        showTransError('تعذّر حفظ الحركة');
+        return;
+      }
+
+      closeTransModal();
+      await loadFinance();
+    };
+
+    async function loadCounts() {
+      const { data, error } = await db.from('apartments').select('status');
+      if (error) { console.log(error); return; }
+
+      const rented = data.filter(a => a.status === 'rented').length;
+      const vacant = data.filter(a => a.status === 'vacant').length;
+      document.getElementById('rentedCount').textContent = rented;
+      document.getElementById('vacantCount').textContent = vacant;
+    }
+
+    async function loadRequests() {
+      const { data, error } = await db
+        .from('requests')
+        .select('id, type, note, status, created_at, buildings(name)')
+        .eq('status', 'new')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.log(error);
+        requestsBox.innerHTML = '<p class="text-red-600 text-sm">تعذّر تحميل الطلبات</p>';
+        return;
+      }
+      if (!data.length) {
+        requestsBox.innerHTML = '<p class="text-sm text-gray-500">ما فيه طلبات جديدة</p>';
+        return;
+      }
+
+      requestsBox.innerHTML = '';
+      data.forEach(req => {
+        const info = typeInfo[req.type] || { icon: '📩', label: req.type, border: 'border-gray-300' };
+        const buildingName = req.buildings ? req.buildings.name : '';
+
+        const card = document.createElement('div');
+        card.className = 'bg-white rounded-xl p-4 border-r-4 flex justify-between items-center ' + info.border;
+        card.innerHTML = `
+          <div>
+            <p class="font-medium">${info.icon} ${esc(info.label)}</p>
+            <p class="text-sm text-gray-500">${esc(buildingName)} · ${timeAgo(req.created_at)}</p>
+            ${req.note ? `<p class="text-sm text-gray-600 mt-1">${esc(req.note)}</p>` : ''}
+          </div>`;
+
+        const btn = document.createElement('button');
+        btn.className = 'border rounded-lg px-3 py-1 text-sm';
+        btn.textContent = 'تم';
+        btn.onclick = () => markDone(req.id, btn);
+        card.appendChild(btn);
+
+        requestsBox.appendChild(card);
+      });
+    }
+
+    async function markDone(id, btn) {
+      btn.disabled = true;
+      const { error } = await db.from('requests').update({ status: 'done' }).eq('id', id);
+      if (error) {
+        console.log(error);
+        btn.disabled = false;
+        alert('تعذّر تحديث الطلب');
+        return;
+      }
+      await loadRequests();
+    }
+
+    const propsBox = document.getElementById('props');
+    const contractModal = document.getElementById('contractModal');
+    const contractError = document.getElementById('contractError');
+    const contractSave = document.getElementById('contractSave');
+    const toastBox = document.getElementById('toast');
+    let editingTenantId = null;
+
+    function showToast(msg) {
+      toastBox.textContent = msg;
+      toastBox.classList.remove('hidden');
+      setTimeout(() => toastBox.classList.add('hidden'), 2500);
+    }
+
+    async function copyText(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast('تم نسخ رابط الموقع');
+      } catch (e) {
+        console.log(e);
+        prompt('انسخ الرابط من هنا:', text);
+      }
+    }
+
+    function daysLeft(dateStr) {
+      const diff = new Date(dateStr) - new Date(todayStr());
+      return Math.ceil(diff / 86400000);
+    }
+
+    async function loadProperties() {
+      const { data, error } = await db
+        .from('apartments')
+        .select('id, unit_number, status, buildings(name, maps_url), tenants(id, full_name, phone, start_date, end_date, rent_amount, next_payment_date, is_active)');
+
+      if (error) {
+        console.log(error);
+        propsBox.innerHTML = '<p class="text-red-600 text-sm">تعذّر تحميل العقارات</p>';
+        return;
+      }
+      if (!data.length) {
+        propsBox.innerHTML = '<p class="text-sm text-gray-500">ما فيه شقق مسجلة</p>';
+        return;
+      }
+
+      data.sort((a, b) => {
+        const an = a.buildings ? a.buildings.name : '';
+        const bn = b.buildings ? b.buildings.name : '';
+        return an.localeCompare(bn, 'ar') || String(a.unit_number).localeCompare(String(b.unit_number), 'ar', { numeric: true });
+      });
+
+      propsBox.innerHTML = '';
+      data.forEach(apt => {
+        const vacant = apt.status === 'vacant';
+        const building = apt.buildings || {};
+        const tenant = (apt.tenants || []).find(t => t.is_active);
+
+        let endBadge = '';
+        let missing = false;
+        if (!vacant && tenant) {
+          if (tenant.rent_amount == null || !tenant.end_date) missing = true;
+          if (tenant.end_date) {
+            const d = daysLeft(tenant.end_date);
+            if (d < 0) endBadge = '<span class="text-xs px-2 py-1 rounded-lg bg-red-100 text-red-800">منتهي</span>';
+            else if (d <= 7) endBadge = '<span class="text-xs px-2 py-1 rounded-lg bg-red-100 text-red-800">ينتهي بعد ' + d + ' يوم</span>';
+            else if (d <= 30) endBadge = '<span class="text-xs px-2 py-1 rounded-lg bg-yellow-100 text-yellow-800">ينتهي بعد ' + d + ' يوم</span>';
+          }
+        }
+
+        const card = document.createElement('div');
+        card.className = 'bg-white rounded-xl p-4';
+        card.innerHTML = `
+          <div class="flex justify-between items-center">
+            <p class="font-medium">${esc(building.name || '')} - شقة ${esc(apt.unit_number)}</p>
+            <span class="text-xs px-3 py-1 rounded-lg ${vacant ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-700'}">
+              ${vacant ? 'متاحة' : 'مؤجرة'}
+            </span>
+          </div>
+          ${!vacant && tenant ? `
+            <div class="mt-2 text-sm text-gray-600 space-y-1">
+              <p>المستأجر: ${esc(tenant.full_name)}</p>
+              <p>الإيجار: ${tenant.rent_amount != null ? money(tenant.rent_amount) : 'غير محدد'}</p>
+              <p>نهاية العقد: ${tenant.end_date ? esc(tenant.end_date) : 'غير محددة'}</p>
+              <p>الدفعة القادمة: ${tenant.next_payment_date ? esc(tenant.next_payment_date) : 'غير محددة'}</p>
+            </div>
+            <div class="mt-2 flex gap-2 flex-wrap">
+              ${endBadge}
+              ${missing ? '<span class="text-xs px-2 py-1 rounded-lg bg-yellow-100 text-yellow-800">بيانات العقد ناقصة</span>' : ''}
+            </div>` : ''}`;
+
+        const actions = document.createElement('div');
+        actions.className = 'mt-3 flex gap-2';
+
+        if (!vacant && tenant) {
+          const edit = document.createElement('button');
+          edit.className = 'flex-1 border rounded-lg p-2 text-sm';
+          edit.textContent = 'تعديل العقد';
+          edit.onclick = () => openContractModal(apt, tenant);
+          actions.appendChild(edit);
+        }
+        if (building.maps_url) {
+          const map = document.createElement('button');
+          map.className = 'flex-1 border rounded-lg p-2 text-sm';
+          map.textContent = 'نسخ الموقع';
+          map.onclick = () => copyText(building.maps_url);
+          actions.appendChild(map);
+        }
+        if (actions.children.length) card.appendChild(actions);
+
+        propsBox.appendChild(card);
+      });
+    }
+
+    function openContractModal(apt, tenant) {
+      editingTenantId = tenant.id;
+      document.getElementById('contractTitle').textContent = 'عقد ' + tenant.full_name + ' - شقة ' + apt.unit_number;
+      document.getElementById('cRent').value = tenant.rent_amount ?? '';
+      document.getElementById('cEnd').value = tenant.end_date ?? '';
+      document.getElementById('cNext').value = tenant.next_payment_date ?? '';
+      contractError.classList.add('hidden');
+      contractModal.classList.remove('hidden');
+    }
+
+    function closeContractModal() {
+      contractModal.classList.add('hidden');
+    }
+
+    contractSave.onclick = async () => {
+      const rent = parseFloat(document.getElementById('cRent').value);
+      const end = document.getElementById('cEnd').value;
+      const next = document.getElementById('cNext').value;
+
+      if (!rent || rent <= 0) {
+        contractError.textContent = 'اكتب قيمة الإيجار';
+        contractError.classList.remove('hidden');
+        return;
+      }
+      if (!end) {
+        contractError.textContent = 'اختر تاريخ نهاية العقد';
+        contractError.classList.remove('hidden');
+        return;
+      }
+
+      contractSave.disabled = true;
+      contractSave.textContent = 'جاري الحفظ...';
+
+      const { error } = await db.from('tenants').update({
+        rent_amount: rent,
+        end_date: end,
+        next_payment_date: next || null
+      }).eq('id', editingTenantId);
+
+      contractSave.disabled = false;
+      contractSave.textContent = 'حفظ';
+
+      if (error) {
+        console.log(error);
+        contractError.textContent = 'تعذّر حفظ العقد';
+        contractError.classList.remove('hidden');
+        return;
+      }
+
+      closeContractModal();
+      await loadProperties();
+    };
+
+    document.getElementById('contractCancel').onclick = closeContractModal;
+
+    document.getElementById('typeIncome').onclick = () => setType('income');
+    document.getElementById('typeExpense').onclick = () => setType('expense');
+    document.getElementById('addTransBtn').onclick = openTransModal;
+    document.getElementById('transCancel').onclick = closeTransModal;
+    monthPicker.onchange = loadFinance;
+    document.getElementById('refresh').onclick = loadAll;
+
+    document.getElementById('logout').onclick = async () => {
+      await db.auth.signOut();
+      window.location.href = 'index.html';
+    };
+
+    init();
+  </script>
+</body>
+</html>

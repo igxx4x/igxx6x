@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="theme.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <title>المالية</title>
+</head>
+<body class="bg-slate-50 min-h-screen" style="font-family:'Tajawal',sans-serif">
+  <header class="bg-white p-4 shadow-sm flex justify-between items-center">
+    <a href="owner.html" class="text-sm text-blue-700">← الرئيسية</a>
+    <h1 class="font-bold">المالية</h1>
+    <input id="month" type="month" class="border rounded-xl px-2 py-1 text-sm" dir="ltr">
+  </header>
+  <main class="p-4 max-w-lg mx-auto">
+    <div class="grid grid-cols-2 gap-3 mb-3">
+      <div class="bg-white rounded-2xl p-4"><p class="text-xs text-slate-500">الدخل</p><p id="inc" class="text-xl font-bold text-emerald-700">-</p></div>
+      <div class="bg-white rounded-2xl p-4"><p class="text-xs text-slate-500">المصروفات</p><p id="exp" class="text-xl font-bold text-red-700">-</p></div>
+    </div>
+    <div class="bg-blue-50 rounded-2xl p-4 flex justify-between items-center">
+      <span class="text-sm text-blue-800">صافي الربح</span><span id="net" class="text-2xl font-bold text-blue-800">-</span>
+    </div>
+    <button id="add" class="mt-3 w-full bg-blue-600 text-white rounded-xl p-3 font-medium">+ إضافة دخل / مصروف</button>
+    <h2 class="text-sm font-medium mt-5 mb-2">حركات الشهر</h2>
+    <div id="list" class="space-y-2"></div>
+  </main>
+
+  <div id="modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-sm rounded-2xl p-5">
+      <h3 class="font-bold mb-4">حركة مالية جديدة</h3>
+      <div class="grid grid-cols-2 gap-2 mb-3">
+        <button id="tInc" class="border rounded-xl p-2 text-sm">دخل</button>
+        <button id="tExp" class="border rounded-xl p-2 text-sm">مصروف</button>
+      </div>
+      <input id="amount" type="number" min="0" step="0.01" placeholder="المبلغ" class="w-full border rounded-xl p-3 mb-3 text-sm" dir="ltr">
+      <input id="desc" type="text" placeholder="الوصف (إيجار شقة 1، فاتورة كهرباء)" class="w-full border rounded-xl p-3 mb-3 text-sm">
+      <select id="bld" class="w-full border rounded-xl p-3 mb-3 text-sm bg-white"></select>
+      <input id="date" type="date" class="w-full border rounded-xl p-3 mb-3 text-sm" dir="ltr">
+      <p id="err" class="text-red-600 text-sm mb-3 hidden"></p>
+      <div class="flex gap-2">
+        <button id="save" class="flex-1 bg-blue-600 text-white rounded-xl p-3 font-medium">حفظ</button>
+        <button id="cancel" class="flex-1 border rounded-xl p-3">إلغاء</button>
+      </div>
+    </div>
+  </div>
+  <script src="supabase.js"></script>
+  <script src="common.js"></script>
+  <script>
+    const month = document.getElementById('month');
+    let type = 'income';
+
+    function setType(t) {
+      type = t;
+      document.getElementById('tInc').className = 'border rounded-xl p-2 text-sm ' + (t === 'income' ? 'bg-emerald-100 border-emerald-400 font-medium' : '');
+      document.getElementById('tExp').className = 'border rounded-xl p-2 text-sm ' + (t === 'expense' ? 'bg-red-100 border-red-400 font-medium' : '');
+    }
+
+    async function load() {
+      const [y, m] = month.value.split('-').map(Number);
+      const to = (m === 12 ? y + 1 : y) + '-' + String(m === 12 ? 1 : m + 1).padStart(2, '0') + '-01';
+      const { data, error } = await db.from('transactions')
+        .select('id, type, amount, description, trans_date, buildings(name)')
+        .gte('trans_date', month.value + '-01').lt('trans_date', to).order('trans_date', { ascending: false });
+      const box = document.getElementById('list');
+      if (error) { console.log(error); box.innerHTML = '<p class="text-red-600 text-sm">تعذّر التحميل</p>'; return; }
+
+      let inc = 0, exp = 0;
+      data.forEach(t => t.type === 'income' ? inc += Number(t.amount) : exp += Number(t.amount));
+      document.getElementById('inc').textContent = money(inc);
+      document.getElementById('exp').textContent = money(exp);
+      document.getElementById('net').textContent = money(inc - exp);
+
+      if (!data.length) { box.innerHTML = '<p class="text-sm text-slate-500">ما فيه حركات في هذا الشهر</p>'; return; }
+      box.innerHTML = '';
+      data.forEach(t => {
+        const isInc = t.type === 'income';
+        const r = document.createElement('div');
+        r.className = 'bg-white rounded-xl p-3 flex justify-between items-center';
+        r.innerHTML = '<div><p class="text-sm font-medium">' + esc(t.description || (isInc ? 'دخل' : 'مصروف')) + '</p><p class="text-xs text-slate-500">' +
+          esc(t.buildings ? t.buildings.name : '') + ' · ' + esc(t.trans_date) + '</p></div>';
+        const side = document.createElement('div');
+        side.className = 'flex items-center gap-3';
+        side.innerHTML = '<span class="text-sm font-bold ' + (isInc ? 'text-emerald-700' : 'text-red-700') + '">' + (isInc ? '+' : '-') + money(t.amount) + '</span>';
+        const del = document.createElement('button');
+        del.className = 'text-xs text-slate-400';
+        del.textContent = 'حذف';
+        del.onclick = async () => {
+          if (!confirm('تأكيد حذف هذه الحركة؟')) return;
+          const { error } = await db.from('transactions').delete().eq('id', t.id);
+          if (error) { console.log(error); toast('تعذّر الحذف'); return; }
+          load();
+        };
+        side.appendChild(del);
+        r.appendChild(side);
+        box.appendChild(r);
+      });
+    }
+
+    document.getElementById('tInc').onclick = () => setType('income');
+    document.getElementById('tExp').onclick = () => setType('expense');
+    document.getElementById('add').onclick = () => {
+      setType('income');
+      document.getElementById('amount').value = '';
+      document.getElementById('desc').value = '';
+      document.getElementById('date').value = today();
+      document.getElementById('err').classList.add('hidden');
+      document.getElementById('modal').classList.remove('hidden');
+    };
+    document.getElementById('cancel').onclick = () => document.getElementById('modal').classList.add('hidden');
+    month.onchange = load;
+
+    document.getElementById('save').onclick = async () => {
+      const err = document.getElementById('err');
+      const amount = parseFloat(document.getElementById('amount').value);
+      const date = document.getElementById('date').value;
+      if (!amount || amount <= 0 || !date) { err.textContent = 'اكتب مبلغ صحيح واختر التاريخ'; err.classList.remove('hidden'); return; }
+      const { error } = await db.from('transactions').insert({
+        building_id: document.getElementById('bld').value || null,
+        type, amount, description: document.getElementById('desc').value.trim() || null, trans_date: date
+      });
+      if (error) { console.log(error); err.textContent = 'تعذّر الحفظ'; err.classList.remove('hidden'); return; }
+      document.getElementById('modal').classList.add('hidden');
+      load();
+    };
+
+    (async () => {
+      if (!(await requireRole('owner'))) return;
+      month.value = today().slice(0, 7);
+      const { data } = await db.from('buildings').select('id, name').order('name');
+      const sel = document.getElementById('bld');
+      (data || []).forEach(b => { const o = document.createElement('option'); o.value = b.id; o.textContent = b.name; sel.appendChild(o); });
+      load();
+    })();
+  </script>
+</body>
+</html>

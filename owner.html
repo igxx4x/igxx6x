@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>لوحة المالك</title>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="theme.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-slate-50 min-h-screen" style="font-family:'Tajawal',sans-serif">
+
+  <header class="bg-white p-4 shadow-sm flex justify-between items-center">
+    <div>
+      <h1 class="font-bold text-lg">لوحة المالك</h1>
+      <p id="ownerName" class="text-sm text-slate-500"></p>
+    </div>
+    <button onclick="logout()" class="border rounded-xl px-3 py-1 text-sm">خروج</button>
+  </header>
+
+  <main class="p-4 space-y-5 max-w-lg mx-auto">
+
+    <div class="grid grid-cols-2 gap-3">
+      <div class="rounded-2xl p-4 bg-emerald-50 text-center">
+        <p id="vacantCount" class="text-3xl font-bold text-emerald-700">-</p>
+        <p class="text-sm text-emerald-800">شقق متاحة</p>
+      </div>
+      <div class="rounded-2xl p-4 bg-slate-200 text-center">
+        <p id="rentedCount" class="text-3xl font-bold text-slate-700">-</p>
+        <p class="text-sm text-slate-700">شقق مؤجرة</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3">
+      <a href="finance.html" class="bg-white rounded-2xl p-5 shadow-sm active:scale-95 transition">
+        <p class="text-3xl mb-2">💰</p>
+        <p class="font-bold">المالية</p>
+        <p class="text-xs text-slate-500">الدخل والمصروفات</p>
+      </a>
+      <a href="requests.html" class="bg-white rounded-2xl p-5 shadow-sm active:scale-95 transition relative">
+        <span id="reqBadge" class="hidden absolute top-3 left-3 bg-red-600 text-white text-xs rounded-full px-2 py-0.5"></span>
+        <p class="text-3xl mb-2">📩</p>
+        <p class="font-bold">الطلبات</p>
+        <p class="text-xs text-slate-500">صيانة ومياه وإخلاء</p>
+      </a>
+      <a href="tenants.html" class="bg-white rounded-2xl p-5 shadow-sm active:scale-95 transition">
+        <p class="text-3xl mb-2">👥</p>
+        <p class="font-bold">المستأجرون</p>
+        <p class="text-xs text-slate-500">العقود وتذكير واتساب</p>
+      </a>
+      <a href="buildings.html" class="bg-white rounded-2xl p-5 shadow-sm active:scale-95 transition">
+        <p class="text-3xl mb-2">🏢</p>
+        <p class="font-bold">العمائر والشقق</p>
+        <p id="buildingsInfo" class="text-xs text-slate-500">إضافة وتعديل</p>
+      </a>
+    </div>
+
+  </main>
+
+  <script src="supabase.js"></script>
+  <script src="common.js"></script>
+  <script>
+    (async () => {
+      const auth = await requireRole('owner');
+      if (!auth) return;
+      document.getElementById('ownerName').textContent = 'أهلاً يا ' + auth.profile.full_name;
+
+      const [apts, reqs, blds] = await Promise.all([
+        db.from('apartments').select('status'),
+        db.from('requests').select('id', { count: 'exact', head: true }).eq('status', 'new'),
+        db.from('buildings').select('id', { count: 'exact', head: true })
+      ]);
+
+      if (apts.data) {
+        document.getElementById('vacantCount').textContent = apts.data.filter(a => a.status === 'vacant').length;
+        document.getElementById('rentedCount').textContent = apts.data.filter(a => a.status === 'rented').length;
+      }
+      if (reqs.count) {
+        const b = document.getElementById('reqBadge');
+        b.textContent = reqs.count + ' جديد';
+        b.classList.remove('hidden');
+      }
+      if (blds.count != null) {
+        document.getElementById('buildingsInfo').textContent = blds.count + ' عمارة · إضافة وتعديل';
+      }
+    })();
+  </script>
+</body>
+</html>

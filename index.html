@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="theme.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <title>تسجيل الدخول</title>
+</head>
+<body class="bg-slate-50 min-h-screen flex items-center justify-center p-4">
+  <div class="bg-white w-full max-w-sm rounded-2xl p-6">
+    <h1 class="text-xl font-bold text-center mb-1">إدارة العقارات</h1>
+    <p class="text-sm text-slate-500 text-center mb-6">سجّل دخولك للمتابعة</p>
+    <input id="loginId" type="text" inputmode="numeric" maxlength="10" placeholder="رقم الدخول (10 أرقام)"
+      class="w-full border rounded-xl p-3 mb-3 text-sm" dir="ltr" autocomplete="username">
+    <input id="password" type="password" placeholder="رمز الدخول"
+      class="w-full border rounded-xl p-3 mb-3 text-sm" dir="ltr" autocomplete="current-password">
+    <p id="error" class="text-red-600 text-sm mb-3 hidden"></p>
+    <button id="btn" class="w-full bg-blue-600 text-white rounded-xl p-3 font-medium">دخول</button>
+  </div>
+
+  <script src="supabase.js"></script>
+  <script>
+    const el = id => document.getElementById(id);
+    const showError = m => { el('error').textContent = m; el('error').classList.remove('hidden'); };
+    const digits = s => s.replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/\D/g, '');
+
+    async function go(userId) {
+      const { data: p } = await db.from('profiles').select('role').eq('id', userId).single();
+      if (!p) { showError('حسابك غير مسجّل في النظام'); await db.auth.signOut(); return false; }
+      window.location.href = p.role === 'owner' ? 'owner.html' : 'guard.html';
+      return true;
+    }
+
+    async function login() {
+      el('error').classList.add('hidden');
+      const id = digits(el('loginId').value);
+      if (id.length !== 10) return showError('رقم الدخول لازم يكون 10 أرقام');
+      if (!el('password').value) return showError('اكتب رمز الدخول');
+
+      el('btn').disabled = true; el('btn').textContent = 'جاري الدخول...';
+      const { data, error } = await db.auth.signInWithPassword({ email: id + '@example.com', password: el('password').value });
+      let ok = false;
+      if (error) showError('رقم الدخول أو الرمز غير صحيح');
+      else ok = await go(data.user.id);
+      if (!ok) { el('btn').disabled = false; el('btn').textContent = 'دخول'; }
+    }
+
+    el('btn').onclick = login;
+    el('password').onkeydown = e => { if (e.key === 'Enter') login(); };
+    (async () => { const { data } = await db.auth.getSession(); if (data.session) go(data.session.user.id); })();
+  </script>
+</body>
+</html>
